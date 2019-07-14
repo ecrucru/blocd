@@ -1,0 +1,81 @@
+
+BODY {
+	margin: 0px;
+	padding: 15px;
+	height: 100%;
+	border-left: 10px solid rgb(224, 224, 164);
+	border-top: 10px solid rgb(164, 224, 224);
+	background-color: rgb(250, 250, 250);
+	font-family: Georgia;
+}
+
+H1 {
+	font-style: italic;
+	color: purple;
+}
+
+H2 {
+	border-bottom: 1px solid lightgray;
+	color: gray;
+}
+
+TABLE {
+	margin-left: 20px;
+	border-collapse: collapse;
+}
+
+TD {
+	border: 1px solid gray;
+	padding: 3px;
+}
+
+TD:first-child {
+	background-color: rgb(224, 224, 224);
+	font-weight: bold;
+	padding-right: 20px;
+}
+
+PRE {
+	display: block;
+	overflow: scroll;
+	max-height: 300px;
+	border: 1px solid gray;
+	border-left: 5px solid gray;
+	padding: 5px;
+	margin-left: 20px;
+	font-family: Courier New;
+	font-size: 10pt;
+}
+
+INPUT.blocd_button {
+	height: 30px;
+	border-radius: 15px;
+	background-color: rgb(224, 224, 224);
+	cursor: pointer;
+	padding-left: 15px;
+	padding-right: 15px;
+}
+
+INPUT:hover.blocd_button {
+	background-color:rgb(192, 192, 224);
+}
+
+IMG {
+	vertical-align: middle;
+	margin-left: 5px;
+}
+
+A {
+	text-decoration: none;
+}
+
+A:hover {
+	text-decoration: underline;
+}
+
+#footer {
+	border-top: 1px solid lightgray;
+	margin-top: 30px;
+	padding: 5px;
+	font-size: smaller;
+}
