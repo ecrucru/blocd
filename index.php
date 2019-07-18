@@ -4,6 +4,7 @@
 	// The Unlicense
 	// https://github.com/ecrucru/blocd/
 	//-------------------------
+	// Requires PHP 5
 
 
 	//-- Configuration
@@ -16,36 +17,41 @@
 
 
 	//-- Connection
-	@mysql_connect(DB_HOST, DB_USER, DB_PWD) or die('Blocd - Verify your DB credentials in the configuration file');
-	mysql_select_db(DB_DB);
-	mysql_query("SET NAMES 'utf8'");
+	$db = @mysqli_init();
+	if (!$db)
+		die('Blocd - Unable to initialize MySQLi');
+	if (!@mysqli_real_connect($db, DB_HOST, DB_USER, DB_PWD, DB_DB))
+		die('Blocd - Verify your DB credentials in the configuration file');
+	mysqli_query($db, "SET NAMES 'utf8'");
 
 
 	//-- Create the local tables
 	$tables = array();
-	$allData = mysql_query('SHOW TABLES');
-	while ($data = mysql_fetch_array($allData))
+	$allData = mysqli_query($db, 'SHOW TABLES');
+	while ($data = mysqli_fetch_array($allData))
 		$tables[] = $data[0];
 	if (!in_array('blocd_domains', $tables))
-		mysql_query("	CREATE TABLE `blocd_domains` (
-						`Domain` VARCHAR(255) NOT NULL,
-						`OK` ENUM('', 'X') NOT NULL,
-						PRIMARY KEY (`Domain`))");
+		mysqli_query($db, "	CREATE TABLE `blocd_domains` (
+							`Domain` VARCHAR(255) NOT NULL,
+							`OK` ENUM('', 'X') NOT NULL,
+							PRIMARY KEY (`Domain`))");
 	if (!in_array('blocd_mbox`', $tables))
-		mysql_query("	CREATE TABLE `blocd_mbox` (
-						`Email` varchar(255) NOT NULL default '',
-						`Host` varchar(255) NOT NULL default '',
-						`Password` varchar(255) NOT NULL default '',
-						`Folder` varchar(255) NOT NULL default '',
-						`Enabled` enum('','X') NOT NULL default 'X',
-						PRIMARY KEY (`Email`))");
+		mysqli_query($db, "	CREATE TABLE `blocd_mbox` (
+							`Email` varchar(255) NOT NULL default '',
+							`Host` varchar(255) NOT NULL default '',
+							`Password` varchar(255) NOT NULL default '',
+							`Folder` varchar(255) NOT NULL default '',
+							`Enabled` enum('','X') NOT NULL default 'X',
+							PRIMARY KEY (`Email`))");
 	unset($data, $allData, $tables);
 
 
 	//-- Functions
 	function termination()
 	{
-		mysql_close();
+		global $db;
+		mysqli_close($db);
+		unset($db);
 	}
 
 	function getGet($pName, $pDefault)
@@ -67,23 +73,6 @@
 		return (preg_match('/^[a-z0-9-\.]+$/i', $data[1]) ? $data[1] : '');
 	}
 
-	function _file_put_contents($pFile, $pData)
-	{
-		if ($pFile == '')
-			return false;
-		if (function_exists('file_put_contents'))		// PHP 5+
-			return (file_put_contents($pFile, $pData) === false ? false : true);
-		else
-		{
-			$handle = fopen($pFile, 'w');
-			if ($handle === false)
-				return false;
-			fwrite($handle, $pData);
-			fclose($handle);
-			return true;
-		}
-	}
-
 
 	//-- AJAX tasks
 	$action = getGet('action', '');
@@ -92,7 +81,7 @@
 		case 'bg_ok':
 		{
 			$domain = getGet('domain', '');
-			mysql_query(sprintf("UPDATE blocd_domains SET OK='X' WHERE Domain='%s'", addslashes($domain)));
+			mysqli_query($db, sprintf("UPDATE blocd_domains SET OK='X' WHERE Domain='%s'", addslashes($domain)));
 			termination();
 			return;
 		}
@@ -100,7 +89,7 @@
 		case 'bg_ko':
 		{
 			$domain = getGet('domain', '');
-			mysql_query(sprintf("DELETE FROM blocd_domains WHERE Domain='%s'", addslashes($domain)));
+			mysqli_query($db, sprintf("DELETE FROM blocd_domains WHERE Domain='%s'", addslashes($domain)));
 			termination();
 			return;
 		}
@@ -215,10 +204,10 @@
 			//-- Database maintenance
 			case 'maintenance':
 			{
-				mysql_query('ALTER TABLE blocd_domains ORDER BY Domain');
-				mysql_query('OPTIMIZE TABLE blocd_domains');
-				mysql_query('ALTER TABLE blocd_mbox ORDER BY Email');
-				mysql_query('OPTIMIZE TABLE blocd_mbox');
+				mysqli_query($db, 'ALTER TABLE blocd_domains ORDER BY Domain');
+				mysqli_query($db, 'OPTIMIZE TABLE blocd_domains');
+				mysqli_query($db, 'ALTER TABLE blocd_mbox ORDER BY Email');
+				mysqli_query($db, 'OPTIMIZE TABLE blocd_mbox');
 				echo '<p>The database has been optimized.</p>';
 				break;
 			}
@@ -251,7 +240,7 @@
 					if ($data != '')
 					{
 						echo sprintf('<li>%s</li>', $data);
-						mysql_query(sprintf("INSERT IGNORE INTO blocd_domains (Domain, OK) VALUES ('%s', '%s')", addslashes($data), addslashes($param)));
+						mysqli_query($db, sprintf("INSERT IGNORE INTO blocd_domains (Domain, OK) VALUES ('%s', '%s')", addslashes($data), addslashes($param)));
 					}
 				}
 				echo '</ul>';
@@ -300,17 +289,17 @@
 						$folder = getPost('blocd_userform_folder', '');
 						$enabled = (isset($_POST['blocd_userform_enabled']) ? 'X' : '');
 						if (isset($_POST['blocd_userform_delete']))
-							mysql_query(sprintf("DELETE FROM blocd_mbox WHERE Email='%s'", addslashes($email)));
+							mysqli_query($db, sprintf("DELETE FROM blocd_mbox WHERE Email='%s'", addslashes($email)));
 						else
 						{
-							mysql_query(sprintf("INSERT IGNORE INTO blocd_mbox VALUES ('%s', '%s', '%s', '%s', '%s')"
-													, addslashes($email)
-													, addslashes($host)
-													, addslashes($password)
-													, addslashes($folder)
-													, addslashes($enabled)
-												));
-							if (mysql_affected_rows() == 0)
+							mysqli_query($db, sprintf("INSERT IGNORE INTO blocd_mbox VALUES ('%s', '%s', '%s', '%s', '%s')"
+															, addslashes($email)
+															, addslashes($host)
+															, addslashes($password)
+															, addslashes($folder)
+															, addslashes($enabled)
+														));
+							if (mysqli_affected_rows($db) == 0)
 							{
 								$fields = array('Host'     => $host,
 												'Password' => $password,
@@ -318,11 +307,11 @@
 												'Enabled'  => $enabled);
 								foreach ($fields as $key => $val)
 									if (($key == 'Enabled') || ($val != ''))
-										mysql_query(sprintf("UPDATE blocd_mbox SET %s='%s' WHERE Email='%s'"
-																, addslashes($key)
-																, addslashes($val)
-																, addslashes($email)
-															));
+										mysqli_query($db, sprintf("UPDATE blocd_mbox SET %s='%s' WHERE Email='%s'"
+																		, addslashes($key)
+																		, addslashes($val)
+																		, addslashes($email)
+																	));
 							}
 						}
 					}
@@ -337,8 +326,8 @@
 									<td>Email</td>
 									<td><select name="blocd_userform_email">
 										<option value="">-- New mailbox --</option>';
-				$allData = mysql_query('SELECT Email FROM blocd_mbox ORDER BY Email');
-				while ($data = mysql_fetch_array($allData))
+				$allData = mysqli_query($db, 'SELECT Email FROM blocd_mbox ORDER BY Email');
+				while ($data = mysqli_fetch_array($allData))
 					echo sprintf('<option value="%s">%s</option>', htmlspecialchars($data['Email']), htmlspecialchars($data['Email']));
 				echo '					</select>
 										<input type="text" name="blocd_userform_email_new" /></td>
@@ -376,8 +365,8 @@
 			//-- Enumerate the folders to find the right folder to extract
 			case 'enumerate':
 			{
-				$allData = mysql_query("SELECT * FROM blocd_mbox WHERE Enabled='X'");
-				while ($data = mysql_fetch_array($allData))
+				$allData = mysqli_query($db, "SELECT * FROM blocd_mbox WHERE Enabled='X'");
+				while ($data = mysqli_fetch_array($allData))
 				{
 					// Open
 					$data['Host'] = sprintf('{%s}', $data['Host']);
@@ -404,8 +393,8 @@
 			case 'fetch':
 			{
 				$buffer = array();
-				$allData = mysql_query("SELECT * FROM blocd_mbox WHERE Enabled='X'");
-				while ($data = mysql_fetch_array($allData))
+				$allData = mysqli_query($db, "SELECT * FROM blocd_mbox WHERE Enabled='X'");
+				while ($data = mysqli_fetch_array($allData))
 				{
 					// Open
 					$mbox = imap_open(sprintf('{%s}%s', $data['Host'], $data['Folder']), $data['Email'], $data['Password']);
@@ -430,7 +419,7 @@
 						{
 							$buffer[] = $domain;
 							echo sprintf('<li>%s</li>', $domain);
-							mysql_query(sprintf("INSERT IGNORE INTO blocd_domains (Domain) VALUES ('%s')", addslashes($domain)));
+							mysqli_query($db, sprintf("INSERT IGNORE INTO blocd_domains (Domain) VALUES ('%s')", addslashes($domain)));
 						}
 						if ($loop % 10 == 0)
 							flush();
@@ -453,9 +442,9 @@
 			case 'validate':
 			{
 				echo '<ul>';
-				$allData = mysql_query("SELECT * FROM blocd_domains WHERE OK='' ORDER BY Domain");
+				$allData = mysqli_query($db, "SELECT * FROM blocd_domains WHERE OK='' ORDER BY Domain");
 				$counter = 1;
-				while ($data = mysql_fetch_array($allData))
+				while ($data = mysqli_fetch_array($allData))
 				{
 					echo sprintf('	<li id="entry_%d">
 										<a href="#" title="Accept" onClick="doValidate(\'%s\',true,%d)">&#x2705;</a>
@@ -485,9 +474,9 @@
 			case 'show':
 			{
 				echo '<ul>';
-				$allData = mysql_query("SELECT * FROM blocd_domains ORDER BY Domain");
+				$allData = mysqli_query($db, "SELECT * FROM blocd_domains ORDER BY Domain");
 				$counter = 1;
-				while ($data = mysql_fetch_array($allData))
+				while ($data = mysqli_fetch_array($allData))
 				{
 					echo sprintf('<li id="entry_%d">
 									<a href="#" title="Remove" onClick="doValidate(\'%s\',false,%d)">&#x274C;</a>
@@ -512,14 +501,14 @@
 			{
 				$fileRaw = '';
 				$filePF = '';
-				$allData = mysql_query("SELECT * FROM blocd_domains WHERE OK='X' ORDER BY Domain");
-				while ($data = mysql_fetch_array($allData))
+				$allData = mysqli_query($db, "SELECT * FROM blocd_domains WHERE OK='X' ORDER BY Domain");
+				while ($data = mysqli_fetch_array($allData))
 				{
 					$fileRaw .= sprintf("%s\n", $data['Domain']);
 					$filePF .= sprintf("/%s$/i REJECT\n", str_replace('.', '\\.', $data['Domain']));
 				}
-				_file_put_contents(FILE_RAW, $fileRaw);
-				_file_put_contents(FILE_POSTFIX, $filePF);
+				file_put_contents(FILE_RAW, $fileRaw);
+				file_put_contents(FILE_POSTFIX, $filePF);
 				echo '<p>The files are generated successfully.</p>';
 				unset($data, $allData, $filePF, $fileRaw);
 				break;
