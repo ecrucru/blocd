@@ -34,6 +34,8 @@
 		mysqli_query($db, "	CREATE TABLE `blocd_domains` (
 							`Domain` VARCHAR(255) NOT NULL,
 							`OK` ENUM('', 'X') NOT NULL,
+							`FirstSeen` date NOT NULL default '0000-00-00',
+							`LastSeen` date NOT NULL default '0000-00-00',
 							PRIMARY KEY (`Domain`))");
 	if (!in_array('blocd_mbox`', $tables))
 		mysqli_query($db, "	CREATE TABLE `blocd_mbox` (
@@ -199,6 +201,7 @@
 	</table>
 
 	<?php
+		$today = date('Y-m-d');
 		switch ($action)
 		{
 			//-- Database maintenance
@@ -227,9 +230,9 @@
 			//-- Importer
 			case 'import':
 			{
-				// Parameter
+				// Parameters
 				$param = getGet('p', '');
-				$param = in_array($param, array('', 'true', 'True', '1', 'ok')) ? 'X' : '';
+				$param = in_array(strtolower($param), array('', 'true', '1', 'ok')) ? 'X' : '';
 
 				// Processing
 				echo '<ul>';
@@ -240,7 +243,13 @@
 					if ($data != '')
 					{
 						echo sprintf('<li>%s</li>', $data);
-						mysqli_query($db, sprintf("INSERT IGNORE INTO blocd_domains (Domain, OK) VALUES ('%s', '%s')", addslashes($data), addslashes($param)));
+						mysqli_query($db, sprintf("	INSERT IGNORE INTO blocd_domains (Domain, OK, FirstSeen, LastSeen)
+													VALUES ('%s', '%s', '%s')"
+														, addslashes($data)
+														, addslashes($param)
+														, addslashes($today)
+														, addslashes($today)
+													));
 					}
 				}
 				echo '</ul>';
@@ -419,7 +428,16 @@
 						{
 							$buffer[] = $domain;
 							echo sprintf('<li>%s</li>', $domain);
-							mysqli_query($db, sprintf("INSERT IGNORE INTO blocd_domains (Domain) VALUES ('%s')", addslashes($domain)));
+							mysqli_query($db, sprintf("UPDATE blocd_domains SET LastSeen='%s' WHERE Domain='%s'"
+															, addslashes($today)
+															, addslashes($domain)
+														));
+							if (mysqli_affected_rows($db) == 0)
+								mysqli_query($db, sprintf("INSERT INTO blocd_domains (Domain, FirstSeen, LastSeen) VALUES ('%s', '%s', '%s')"
+															, addslashes($domain)
+															, addslashes($today)
+															, addslashes($today)
+														));
 						}
 						if ($loop % 10 == 0)
 							flush();
@@ -450,7 +468,7 @@
 										<a href="#" title="Accept" onClick="doValidate(\'%s\',true,%d)">&#x2705;</a>
 										<a href="#" title="Reject" onClick="doValidate(\'%s\',false,%d)">&#x274C;</a>
 										<a href="#" title="Whois" onClick="doWhois(\'%s\')">&#x1F4EC;</a>
-										%s
+										<span title="Last seen on %s">%s</span>
 									</li>%s'
 										, $counter
 										, addslashes($data['Domain'])
@@ -458,6 +476,7 @@
 										, addslashes($data['Domain'])
 										, $counter
 										, addslashes($data['Domain'])
+										, htmlspecialchars($data['LastSeen'])
 										, htmlspecialchars($data['Domain'])
 										, "\n"
 								);
@@ -481,11 +500,12 @@
 					echo sprintf('<li id="entry_%d">
 									<a href="#" title="Remove" onClick="doValidate(\'%s\',false,%d)">&#x274C;</a>
 									<a href="#" title="Whois" onClick="doWhois(\'%s\')">&#x1F4EC;</a>
-									%s%s</li>'
+									<span title="Last seen on %s">%s</span>%s</li>'
 										, $counter
 										, addslashes($data['Domain'])
 										, $counter
 										, addslashes($data['Domain'])
+										, htmlspecialchars($data['LastSeen'])
 										, htmlspecialchars($data['Domain'])
 										, ($data['OK']!='X'?' <em style="color:red">(Pending)</em>':'')
 								);
